@@ -1,0 +1,45 @@
+- name: Localhost setup
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: yes
+  vars:
+    docker_engine_repo: stable
+    docker_compose_version: 1.28.5
+
+  tasks:
+  - name: Install initial packages #https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
+    apt:
+      package: 
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg
+      state: present
+      update_cache: yes
+
+  - name: Add Docker’s official GPG key
+    shell:
+      cmd: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+  - name: Setup docker engine repo
+    shell:
+      cmd: "echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) {{docker_engine_repo}}\" | tee /etc/apt/sources.list.d/docker.list > /dev/null"
+
+  - name: Install Docker engine
+    apt:
+      package:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+      update_cache: yes
+
+  - name: Download docker-compose
+    shell:
+      cmd: "curl -L \"https://github.com/docker/compose/releases/download/{{docker_compose_version}}/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose"
+
+  - name: Make docker-compose installer executable
+    shell:
+      cmd: chmod +x /usr/local/bin/docker-compose
+
+

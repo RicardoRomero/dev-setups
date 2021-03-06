@@ -1,0 +1,188 @@
+- name: Localhost setup
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: yes
+  vars:
+    db_default_root_pass: 'root'
+    final_root_pass: ''
+    php_version: '7.4'
+    xdebug_lines:
+      - 'zend_extension="xdebug.so"'
+      - 'xdebug.mode=debug,develop'
+      - 'xdebug.start_with_request=trigger'
+      - 'xdebug.collect_params=1'
+      - 'xdebug.discover_client_host=yes'
+      - 'xdebug.client_port=9001'
+      - 'xdebug.scream=0'
+      - '; xdebug.show_local_vars=1'
+      - 'xdebug.idekey=VSCODE'
+      - '; xdebug.remote_log=~/Desktop/xdebug.log'
+      - '; xdebug.halt_level=0#E_WARNING|E_NOTICE|E_USER_WARNING|E_USER_NOTICE'
+      - 'xdebug.force_display_errors=0'
+      - 'xdebug.force_error_reporting=0'
+  tasks:
+  - name: install packages
+    apt:
+      package: 
+        - vim
+        - curl
+        - build-essential
+        - zip
+        - unzip
+      state: present
+
+  - name: add php repo
+    apt_repository:
+      repo:  ppa:ondrej/php
+      state: present
+      update_cache: yes
+
+  - name: install php
+    apt:
+      name:
+        - "php{{php_version}}"
+        - "php{{php_version}}-common"
+        - "php{{php_version}}-cli"
+        - "php{{php_version}}-fpm"
+        - "php{{php_version}}-mysql"
+        - "php{{php_version}}-xml"
+        - "php{{php_version}}-curl"
+        - "php{{php_version}}-mbstring"
+        - "php{{php_version}}-gd"
+        - "php{{php_version}}-zip"
+        - "php{{php_version}}-intl"
+        - "php{{php_version}}-bcmath"
+        - "php{{php_version}}-soap"
+        - "php{{php_version}}-dev" # for phpize
+        - php-xdebug # optional, it probably won't work out of the box
+      state: present
+
+# Configuring PHP
+  - name: Ensure error_reporting equals E_ALL
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?error_reporting.*'
+      line: error_reporting = E_ALL
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure display_errors is On
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?display_errors.*'
+      line: display_errors = On
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure max_input_vars equals 10000
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?max_input_vars.*'
+      line: max_input_vars = 10000
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure memory_limit equals 768M
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?memory_limit.*'
+      line: memory_limit = 768M
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure post_max_size equals 100M
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?post_max_size.*'
+      line: post_max_size = 100M
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure upload_max_filesize equals 100M
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?upload_max_filesize.*'
+      line: upload_max_filesize = 100M
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure html_errors equals On
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?html_errors.*'
+      line: html_errors = On
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure date.timezone equals America/Toronto
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{item}}/php.ini"
+      regexp: ';?date\.timezone.*'
+      line: date.timezone = America/Toronto
+    loop:
+      - 'fpm'
+      - 'cli'
+  - name: Ensure xdebug configuration is added
+    lineinfile:
+      path: "/etc/php/{{php_version}}/{{ item[1] }}/php.ini"
+      regexp: 'somethingThatWillNeverMatchSoThatItsAppendedAfterEOF'
+      line: "{{ item[0] }}"
+    loop: "{{ xdebug_lines |product(['cli', 'fpm']) |list }}"
+
+  - name: Define MySQL default root password
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - "bash -c \"debconf-set-selections <<< 'mysql-server mysql-server/root_password password {{ db_default_root_pass }}'\""
+      - "bash -c \"debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password {{ db_default_root_pass }}'\""
+
+  - name: Install mysql-server and nginx
+    apt:
+      package: 
+        - mysql-server
+        - nginx
+      state: present
+
+  - name: Change MySQL passwords for 'root'@'localhost' part 1
+    shell:
+      cmd:  "mysql -uroot -p{{ db_default_root_pass }} -e \"{{ item }}\""
+    loop:
+      - "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+
+  - name: Add 'root'@'%' user
+    shell:
+      cmd:  "mysql -uroot -e \"{{ item }}\""
+    loop:
+      - FLUSH PRIVILEGES;
+      - "CREATE USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+      - GRANT ALL PRIVILEGES ON *.* TO 'root'@'%';
+      - FLUSH PRIVILEGES;
+
+  - name: Copy nginx configurations
+    copy:
+      src: "{{ item }}"
+      dest: "/etc/nginx/sites-enabled/{{ item }}"
+      mode: 0644
+    loop:
+      - 'nginx-godin.conf'
+
+  - name: Reload nginx
+    service:
+      name: nginx
+      state: reloaded
+
+  - name: Allow remote MySQL connections
+    lineinfile:
+      path: /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: 'bind-adddress.*'
+      line: bind-address = 0.0.0.0
+
+  - name: Reload MySQL
+    service:
+      name: mysql
+      state: reloaded
+
+  # - name: Load db
+  #   shell:
+  #     cmd: cat my_db_backup.sql | mysql -u root
