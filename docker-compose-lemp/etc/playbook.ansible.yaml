@@ -1,0 +1,249 @@
+- name: Localhost setup
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  become: yes
+  vars:
+    docker:
+      install: yes
+    mysql:
+      install: no
+      default_root_pass: 'root' # Must not be empty
+      final_root_pass: '' # Can be empty
+      allow_remote_connections: yes
+    nginx:
+      install: no
+    php:
+      install: no
+      version: '7.4'
+      ini_lines:
+        - {regexp: ';?error_reporting.*', replacement: 'error_reporting = E_ALL'}
+        - {regexp: ';?display_errors.*', replacement: 'display_errors = On'}
+        - {regexp: ';?max_input_vars.*', replacement: 'max_input_vars = 10000'}
+        - {regexp: ';?memory_limit.*', replacement: 'memory_limit = 768M'}
+        - {regexp: ';?post_max_size.*', replacement: 'post_max_size = 100M'}
+        - {regexp: ';?upload_max_filesize.*', replacement: 'upload_max_filesize = 100M'}
+        - {regexp: ';?html_errors.*', replacement: 'html_errors = On'}
+        - {regexp: ';?date\.timezone.*', replacement: 'date.timezone = America/Toronto'}
+    xdebug:
+      install: no
+      ini_lines:
+        - 'zend_extension="xdebug.so"'
+        - 'xdebug.mode=debug,develop'
+        - 'xdebug.start_with_request=trigger'
+        - 'xdebug.discover_client_host=yes'
+        - 'xdebug.client_port=9003'
+        - 'xdebug.scream=0'
+        - '; xdebug.show_local_vars=1'
+        - 'xdebug.idekey=VSCODE'
+        - '; xdebug.halt_level=0#E_WARNING|E_NOTICE|E_USER_WARNING|E_USER_NOTICE'
+        - 'xdebug.force_display_errors=0'
+        - 'xdebug.force_error_reporting=0'
+        - 'xdebug.log=/vagrant/var/log/xdebug.log'
+    elasticsearch:
+      install: no
+  tasks:
+  - name: Install basic packages
+    apt:
+      package: 
+        - vim
+        - curl
+        - build-essential
+        - zip
+        - unzip
+      state: present
+      update_cache: yes
+
+  - name: Install Docker requirements # https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
+    apt:
+      package: 
+        - apt-transport-https
+        - ca-certificates
+        - gnupg
+        - lsb-release
+      state: present
+      update_cache: yes
+    when: docker.install |bool
+
+  - name: Add repo and keys for docker
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg'
+      - 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null'
+    when: docker.install |bool
+
+  - name: Install Docker
+    apt:
+      package: 
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+      state: present
+      update_cache: yes
+    when: docker.install |bool
+
+  - name: Instal docker-compose # https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - 'curl -L "https://github.com/docker/compose/releases/download/1.27.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose'
+      - 'chmod +x /usr/local/bin/docker-compose'
+    when: docker.install |bool
+
+  - name: add php repo
+    apt_repository:
+      repo:  ppa:ondrej/php
+      state: present
+      update_cache: yes
+    when: php.install |bool
+
+  - name: install php
+    apt:
+      name:
+        - "php{{php.version}}"
+        - "php{{php.version}}-common"
+        - "php{{php.version}}-cli"
+        - "php{{php.version}}-fpm"
+        - "php{{php.version}}-mysql"
+        - "php{{php.version}}-xml"
+        - "php{{php.version}}-curl"
+        - "php{{php.version}}-mbstring"
+        - "php{{php.version}}-gd"
+        - "php{{php.version}}-zip"
+        - "php{{php.version}}-intl"
+        - "php{{php.version}}-bcmath"
+        - "php{{php.version}}-soap"
+        - "php{{php.version}}-dev" # for phpize
+      state: present
+    when: php.install |bool
+
+  # Configure PHP
+  - name: Modify the PHP configuration
+    lineinfile:
+      path: "/etc/php/{{php.version}}/{{ item[1] }}/php.ini"
+      regexp: "{{ item[0].regexp }}"
+      line: "{{ item[0].replacement }}"
+    loop: "{{ php.ini_lines |product(['cli', 'fpm']) |list }}"
+    when: php.install |bool
+
+  - name: Install XDebug
+    shell:
+      cmd: pecl install xdebug
+    when: xdebug.install |bool
+  
+  - name: Ensure xdebug configuration is added
+    lineinfile:
+      path: "/etc/php/{{php.version}}/{{ item[1] }}/php.ini"
+      regexp: 'somethingThatWillNeverMatchSoThatItsAppendedAfterEOF'
+      line: "{{ item[0] }}"
+    loop: "{{ xdebug.ini_lines |product(['cli', 'fpm']) |list }}"
+    when: xdebug.install |bool
+
+  - name: Restart PHP-FPM
+    service:
+      name: "php{{php.version}}-fpm"
+      state: restarted
+    when: php.install |bool
+
+  - name: Install nginx
+    apt:
+      package:
+        - nginx
+      state: present
+    when: nginx.install |bool
+
+  - name: Copy nginx configurations
+    copy:
+      src: "{{ item }}"
+      dest: "/etc/nginx/sites-enabled/{{ item }}"
+      mode: 0644
+    loop:
+      - 'wordpress.conf'
+    when: nginx.install |bool
+
+  - name: Reload nginx
+    service:
+      name: nginx
+      state: reloaded
+    when: nginx.install |bool
+
+  - name: Install composer
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - 'curl -sS https://getcomposer.org/installer -o composer-setup.php' # https://www.digitalocean.com/community/tutorials/how-to-install-composer-on-ubuntu-20-04-quickstart
+      - 'php composer-setup.php --install-dir=/usr/local/bin --filename=composer'
+    when: php.install |bool
+
+  - name: Add repo and keys for elasticsearch
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - 'curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -' # https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-elasticsearch-on-ubuntu-20-04
+      - 'echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-7.x.list'
+    when: elasticsearch.install |bool
+
+  - name: Install elastic search
+    apt:
+      package: 
+        - elasticsearch
+      update_cache: yes
+    when: elasticsearch.install |bool
+
+  - name: Start elasticsearch and set it to start automatically
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - systemctl enable elasticsearch.service
+      - service elasticsearch start
+    when: elasticsearch.install |bool
+
+  - name: Define MySQL default root password
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - "bash -c \"debconf-set-selections <<< 'mysql-server mysql-server/root_password password {{ mysql.default_root_pass }}'\""
+      - "bash -c \"debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password {{ mysql.default_root_pass }}'\""
+    when: mysql.install |bool
+
+  - name: Install mysql-server
+    apt:
+      package: 
+        - mysql-server
+      state: present
+    when: mysql.install |bool
+
+  - name: Change MySQL passwords for 'root'@'localhost' part 1
+    shell:
+      cmd:  "mysql -uroot -p{{ mysql.default_root_pass }} -e \"{{ item }}\""
+    loop:
+      - "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+    when: mysql.install |bool
+
+  - name: Add 'root'@'%' user
+    shell:
+      cmd:  "mysql -uroot -e \"{{ item }}\""
+    loop:
+      - FLUSH PRIVILEGES;
+      - "CREATE USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+      - GRANT ALL PRIVILEGES ON *.* TO 'root'@'%';
+      - FLUSH PRIVILEGES;
+    when: mysql.install |bool
+
+  - name: Allow remote MySQL connections
+    lineinfile:
+      path: /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: 'bind-adddress.*'
+      line: bind-address = 0.0.0.0
+    when: mysql.install |bool and mysql.allow_remote_connections |bool
+
+  - name: Reload MySQL # I don't know why but it doesn't work, that's why it's last
+    service:
+      name: mysql
+      state: reloaded
+    when: mysql.install |bool
+
+  # - name: Load db
+  #   shell:
+  #     cmd: cat thedb.sql | mysql -u root

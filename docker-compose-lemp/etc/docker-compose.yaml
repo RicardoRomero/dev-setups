@@ -1,0 +1,41 @@
+version: '3.1'
+
+# https://adoltech.com/blog/how-to-set-up-nginx-php-fpm-and-mysql-with-docker-compose/
+
+services:
+
+  db:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+      - "8081:8081"
+    volumes:
+      - "./nginxconf/wordpress.conf:/etc/nginx/conf.d/wordpress.conf"
+      # - "../:/usr/share/nginx/html/wordpress"
+      - "./index.php:/usr/share/nginx/html/index.php"
+    depends_on:
+      - php-fpm
+      - db
+    links:
+      - php-fpm
+      - db
+
+  php-fpm:
+    image: phpdockerio/php74-fpm
+    volumes: # php fpm needs to have access to the files
+      - "./index.php:/usr/share/nginx/html/index.php"
+
+#   adminer:
+#     image: adminer
+#     restart: always
+#     ports:
+#       - 8080:8080
