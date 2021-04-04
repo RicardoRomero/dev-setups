@@ -1,0 +1,71 @@
+version: '3.1'
+
+services:
+
+  # code-server:
+  #   image: codercom/code-server:latest
+  #   user: '0:0'
+  #   volumes:
+  #     - './code-server/.config:/root/.config/code-server'
+  #     - './code-server/code-server:/root/.local/share/code-server'
+  #     - './test.php:/home/coder/test.php'
+  #     # php folders:
+  #     # - '/home/vagrant/php/etc/php/7.4/cli:/etc/php/7.4/cli/'
+  #     # - '/home/vagrant/php/usr/lib/php:/usr/lib/php'
+  #     # - '/home/vagrant/php/var/lib/php/sessions:/var/lib/php/sessions'
+  #     # - '/home/vagrant/php/usr/share/php:/usr/share/php'
+  #     # - '/home/vagrant/php/usr/local/sbin:/usr/local/sbin'
+  #   ports:
+  #     - '0.0.0.0:7000:8080'
+  #   depends_on:
+  #     - db
+
+  code-server:
+    build:
+        context: ./code-server-dockerfile
+    container_name: code-server
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+      - CODE_SERVER_PASSWORD=thepassword #optional
+      # - HASHED_PASSWORD= #optional
+      # - SUDO_PASSWORD=password #optional
+      # - SUDO_PASSWORD_HASH= #optional
+      # - PROXY_DOMAIN=code-server.my.domain #optional
+    volumes:
+      - ./code-server/.config/config.yaml:/root/.config/code-server/config.yaml
+    ports:
+      - 7000:8080
+    restart: unless-stopped
+
+  db:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    # restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - '/home/vagrant/mysql-data:/var/lib/mysql'
+    ports:
+      - 3306:3306
+
+  php-fpm:
+    image: phpdockerio/php74-fpm
+    volumes: # php fpm needs to have access to the php files NGINX serves
+      - "./index.php:/usr/share/nginx/html/index.php"
+      # php folders:
+      # - '/home/vagrant/php/etc/php/7.4/cli:/etc/php/7.4/cli/'
+      # - '/home/vagrant/php/usr/lib/php:/usr/lib/php'
+      # - '/home/vagrant/php/var/lib/php/sessions:/var/lib/php/sessions'
+      # - '/home/vagrant/php/usr/share/php:/usr/share/php'
+      # - '/home/vagrant/php/usr/local/sbin:/usr/local/sbin'
+    ports:
+      - 9000:9000
+
+  # adminer:
+  #   image: adminer
+  #   restart: always
+  #   ports:
+  #     - 8081:8080
+

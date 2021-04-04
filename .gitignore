@@ -1,1 +1,5 @@
 **/.vagrant/
+**/code-server/code-server/*
+**/mysql-data/*
+
+!**.gitkeep
