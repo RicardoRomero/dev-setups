@@ -35,6 +35,8 @@ services:
       # - PROXY_DOMAIN=code-server.my.domain #optional
     volumes:
       - ./code-server/.config/config.yaml:/root/.config/code-server/config.yaml
+      - ./code-server/code-server:/root/.local/share/code-server
+    #   - ./test.php:/root/test.php
     ports:
       - 7000:8080
     restart: unless-stopped

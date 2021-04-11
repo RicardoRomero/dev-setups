@@ -1,6 +1,11 @@
 FROM ubuntu:latest
 
+# This env variable prevents intallation prompts
 ENV DEBIAN_FRONTEND=noninteractive
+ENV CODESERVER_VERSION=3.9.3
+# PATH has to be modified like this
+ENV PATH=/root/.local/bin":${PATH}"
+
 
 # https://blog.zackad.dev/en/2017/08/17/add-ppa-simple-way.html
 RUN apt-get update && \
@@ -13,12 +18,10 @@ RUN apt-get update && \
 
 # https://github.com/cdr/code-server/blob/main/docs/install.md#standalone-releases
 RUN mkdir -p ~/.local/lib ~/.local/bin && \
-    php -r "echo file_get_contents('https://github.com/cdr/code-server/releases/download/v3.9.2/code-server-3.9.2-linux-amd64.tar.gz');" \
+    php -r "echo file_get_contents('https://github.com/cdr/code-server/releases/download/v$CODESERVER_VERSION/code-server-$CODESERVER_VERSION-linux-amd64.tar.gz');" \
     | tar -C ~/.local/lib -xz  && \
-    mv ~/.local/lib/code-server-3.9.2-linux-amd64 ~/.local/lib/code-server-3.9.2  && \
-    ln -s ~/.local/lib/code-server-3.9.2/bin/code-server ~/.local/bin/code-server
-
-RUN PATH=~/.local/bin":"$PATH
+    mv ~/.local/lib/code-server-$CODESERVER_VERSION-linux-amd64 ~/.local/lib/code-server-$CODESERVER_VERSION  && \
+    ln -s ~/.local/lib/code-server-$CODESERVER_VERSION/bin/code-server ~/.local/bin/code-server
 
 RUN echo "**** clean up ****" && \
     apt-get purge --auto-remove -y \
@@ -35,6 +38,9 @@ RUN echo "**** clean up ****" && \
         /var/tmp/*
 
 EXPOSE 8080/tcp
+
+#RUN export PATH=~/.local/bin":"$PATH
+#RUN echo $PATH;
 
 CMD code-server
 # Now visit http://127.0.0.1:8080. Your password is in ~/.config/code-server/config.yaml
