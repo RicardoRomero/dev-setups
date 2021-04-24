@@ -1,5 +1,7 @@
+.vscode
 **/.vagrant/
 **/code-server/code-server/*
 **/mysql-data/*
-
+**/auth.json
+**/magento/
 !**.gitkeep

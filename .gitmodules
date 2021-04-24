@@ -1,0 +1,3 @@
+[submodule "docker-compose-alphinx/etc/docker-phpfpm-nginx"]
+	path = docker-compose-alphinx/etc/docker-phpfpm-nginx
+	url = git@github.com:jabardigitalservice/docker-phpfpm-nginx.git

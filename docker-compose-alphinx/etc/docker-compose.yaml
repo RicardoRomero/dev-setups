@@ -1,0 +1,44 @@
+version: '3.1'
+
+services:
+
+    web:
+        build:
+            context: ./docker-phpfpm-nginx/7.4
+        image: ricardo/alphinx:latest
+        ports:
+            - 1919:1919
+            - 8080:8080
+        restart: unless-stopped
+        volumes:
+            - './nginx/magento-base.conf:/etc/nginx/conf.d/magento-base.conf'
+            - './magento:/var/www/html/magento'
+            - './.composer/auth.json:/.composer/auth.json'
+        links:
+            - db
+            - elastics
+
+    db:
+        image: mysql
+        command: --default-authentication-plugin=mysql_native_password
+        # restart: always
+        # user: nobody
+        environment:
+            MYSQL_ROOT_PASSWORD: ''
+            MYSQL_ALLOW_EMPTY_PASSWORD: 'yes' # has to be string
+        volumes:
+            - '/home/vagrant/mysql-data:/var/lib/mysql'
+        ports:
+            - 3306:3306
+    
+    elastics:
+        image: docker.io/bitnami/elasticsearch:7
+        ports:
+            - '9200:9200'
+            - '9300:9300'
+    #     image: elasticsearch:7.12.0
+
+# elasticsearch won't run if this is not executed on the docker host: sysctl -w vm.max_map_count=262144
+
+# composer create-project --repository=https://repo.magento.com/ magento/project-community-edition DIRNAME
+# bin/magento setup:install --base-url=http://127.0.0.1:1919 --backend-frontname=admin --db-host=db --db-name=magento --db-user=root --db-password="" --admin-firstname=Magento --admin-lastname=User --admin-email=ricardorg@mailinator.com --admin-user=admin --admin-password=admin123 --language=en_US --currency=CAD --timezone=America/Toronto --search-engine=elasticsearch7 --elasticsearch-host=elastics --elasticsearch-port=9200 --cleanup-database
