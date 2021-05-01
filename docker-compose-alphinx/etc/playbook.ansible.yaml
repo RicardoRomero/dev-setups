@@ -5,11 +5,11 @@
   become: yes
   vars:
     docker:
-      install: yes
-    mysql:
       install: no
+    mysql:
+      install: yes
       default_root_pass: 'root' # Must not be empty
-      final_root_pass: '' # Can be empty
+      final_root_pass: 'sandboxroot' # Can be empty
       allow_remote_connections: yes
     nginx:
       install: no
@@ -155,11 +155,11 @@
 
   - name: Copy nginx configurations
     copy:
-      src: "{{ item }}"
-      dest: "/etc/nginx/sites-enabled/{{ item }}"
+      src: "{{ item.path }}/{{ item.basename}}"
+      dest: "/etc/nginx/sites-enabled/{{ item.basename }}"
       mode: 0644
     loop:
-      - 'wordpress.conf'
+      - {path: '../nginx', basename: 'magento-base.conf'}
     when: nginx.install |bool
 
   - name: Reload nginx

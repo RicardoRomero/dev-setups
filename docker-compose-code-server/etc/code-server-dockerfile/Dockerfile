@@ -4,6 +4,9 @@ FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CODESERVER_VERSION=3.9.3
 # ENV TZ=America/Toronto
+# Build process user and group ids
+ENV BUID=1000
+ENV BGID=1000
 # PATH has to be modified like this
 ENV PATH=/home/coder/.local/bin":${PATH}"
 
@@ -19,16 +22,19 @@ RUN apt-get update && \
     # printf '2\n\n149\n' | apt-get install -y php7.4
 
 RUN echo "Add coder user" && \
-    printf 'passwd\npasswd\nCode Server\n1\n333-333-3333\n333-333-3333\nOther\nY\n' | adduser coder
+    addgroup --system --gid $BGID coder && \
+    adduser --system --uid=$BUID --gid $BGID --disabled-password coder
 
 # https://github.com/cdr/code-server/blob/main/docs/install.md#standalone-releases
 RUN echo "Install code-server" && \
-    printf 'passwd\n' | su coder -c '\
-    mkdir -p ~/.local/lib ~/.local/bin && \
-    php -r "echo file_get_contents('"'"'https://github.com/cdr/code-server/releases/download/v$CODESERVER_VERSION/code-server-$CODESERVER_VERSION-linux-amd64.tar.gz'"'"');" \
-    | tar -C ~/.local/lib -xz  && \
-    mv ~/.local/lib/code-server-$CODESERVER_VERSION-linux-amd64 ~/.local/lib/code-server-$CODESERVER_VERSION  && \
-    ln -s ~/.local/lib/code-server-$CODESERVER_VERSION/bin/code-server ~/.local/bin/code-server'
+    export CODERHOME=/home/coder && \
+    mkdir -p $CODERHOME/.local/lib $CODERHOME/.local/bin && \
+    php -r "echo file_get_contents('https://github.com/cdr/code-server/releases/download/v$CODESERVER_VERSION/code-server-$CODESERVER_VERSION-linux-amd64.tar.gz');" \
+    | tar -C $CODERHOME/.local/lib -xz  && \
+    mv $CODERHOME/.local/lib/code-server-$CODESERVER_VERSION-linux-amd64 $CODERHOME/.local/lib/code-server-$CODESERVER_VERSION  && \
+    ln -s $CODERHOME/.local/lib/code-server-$CODESERVER_VERSION/bin/code-server $CODERHOME/.local/bin/code-server
+
+RUN chown -R coder:coder /home/coder/.local
 
 RUN echo "**** clean up ****" && \
     apt-get purge --auto-remove -y \
@@ -48,7 +54,8 @@ EXPOSE 8080/tcp
 
 #RUN export PATH=~/.local/bin":"$PATH
 #RUN echo $PATH;
+USER coder
 
 # CMD code-server
-CMD printf 'passwd' | su coder -c 'export PATH=~/.local/bin":"$PATH && code-server'
+CMD export PATH=~/.local/bin":"$PATH && code-server
 # Now visit http://127.0.0.1:8080. Your password is in ~/.config/code-server/config.yaml

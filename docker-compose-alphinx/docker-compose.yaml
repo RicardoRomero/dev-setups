@@ -9,19 +9,19 @@ version: '3.1'
 #                 - subnet: 172.177.57.0/24
 
 services:
-
     php-fpm:
         build:
             context: ./fpm
         image: ricardo/fpm-alpine:latest
         restart: unless-stopped
         container_name: mage-fpm
-        # user: 33
+        user: www-data
         volumes:
             - './magento:/var/www/html/magento'
-            - './.composer/auth.json:/home/www-data/.config/composer/auth.json'
-            - './.composer/auth.json:/var/www/.composer/auth.json'
+            - './.composer:/home/www-data/.composer'
+            - './.composer/auth.json:/home/www-data/.composer/auth.json'
             - './fpm/99-php-custom.ini:/usr/local/etc/php/conf.d/99-php-custom.ini'
+            - '/var/www/.ssh:/home/www-data/.ssh'
         links:
             - db
             - elastics
@@ -33,7 +33,7 @@ services:
             - "1918:80"
             - "1919:1919"
         volumes:
-            # - "./nginx/magento-base.conf:/etc/nginx/conf.d/magento-base.conf"
+            - "./nginx/magento-base.conf:/etc/nginx/conf.d/magento-base.conf"
             - "./magento:/var/www/html/magento"
         depends_on:
             - php-fpm
@@ -63,7 +63,23 @@ services:
         #     - '9200:9200'
         #     - '9300:9300'
 
+    code-server:
+        build:
+            context: ../docker-compose-code-server/etc/code-server-dockerfile
+        image: ricardo/codeserver-alpine:latest
+        container_name: code-server
+        environment:
+          - BUID=82 #build user id
+          - BGID=82
+        volumes:
+            - ./code-server/.config/config.yaml:/home/coder/.config/code-server/config.yaml
+            - ./code-server/code-server:/home/coder/.local/share/code-server
+        ports:
+            - 7000:8080
+        # restart: unless-stopped
+
+
 # elasticsearch may not run if this is not executed on the docker host: sysctl -w vm.max_map_count=262144
 
 # composer create-project --repository=https://repo.magento.com/ magento/project-community-edition DIRNAME
-# bin/magento setup:install --base-url=http://127.0.0.1:1919 --backend-frontname=admin --db-host=db --db-name=magento --db-user=root --db-password="" --admin-firstname=Magento --admin-lastname=User --admin-email=ricardorg@mailinator.com --admin-user=admin --admin-password=admin123 --language=en_US --currency=CAD --timezone=America/Toronto --search-engine=elasticsearch7 --elasticsearch-host=elastics --elasticsearch-port=9200 --cleanup-database
+# bin/magento setup:install --base-url=http://sandbox.flagship.zone:1919 --backend-frontname=admin --db-host=db --db-name=magento --db-user=root --db-password="" --admin-firstname=Magento --admin-lastname=User --admin-email=ricardorg@mailinator.com --admin-user=admin --admin-password=admin123 --language=en_US --currency=CAD --timezone=America/Toronto --search-engine=elasticsearch7 --elasticsearch-host=elastics --elasticsearch-port=9200 --cleanup-database

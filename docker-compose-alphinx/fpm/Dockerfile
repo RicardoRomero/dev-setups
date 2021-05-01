@@ -16,7 +16,10 @@ RUN install-php-extensions bcmath \
     zip \
     sockets
 
-RUN install-php-extensions xdebug
+# RUN install-php-extensions xdebug
+
+RUN apk add --no-cache git openssh-client
+
 RUN mkdir -p /var/www/html/magento && \
 chown -R www-data:www-data /var/www/html
 
