@@ -7,10 +7,10 @@
     docker:
       install: no
     mysql:
-      install: no
+      install: yes
       default_root_pass: 'root' # Must not be empty
-      final_root_pass: 'sandboxroot' # Can be empty
-      allow_remote_connections: yes
+      final_root_pass: '' # Can be empty
+      allow_remote_connections: no
     nginx:
       install: no
     php:
@@ -146,6 +146,15 @@
       state: restarted
     when: php.install |bool
 
+  - name: Install composer
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - 'curl -sS https://getcomposer.org/installer -o composer-setup.php' # https://www.digitalocean.com/community/tutorials/how-to-install-composer-on-ubuntu-20-04-quickstart
+      - 'php composer-setup.php --install-dir=/usr/local/bin --filename=composer'
+      - 'rm composer-setup.php'
+    when: php.install |bool
+
   - name: Install nginx
     apt:
       package:
@@ -168,13 +177,6 @@
       state: reloaded
     when: nginx.install |bool
 
-  - name: Install composer
-    shell:
-      cmd: "{{ item }}"
-    loop:
-      - 'curl -sS https://getcomposer.org/installer -o composer-setup.php' # https://www.digitalocean.com/community/tutorials/how-to-install-composer-on-ubuntu-20-04-quickstart
-      - 'php composer-setup.php --install-dir=/usr/local/bin --filename=composer'
-    when: php.install |bool
 
   - name: Add repo and keys for elasticsearch
     shell:
@@ -218,7 +220,7 @@
     shell:
       cmd:  "mysql -uroot -p{{ mysql.default_root_pass }} -e \"{{ item }}\""
     loop:
-      - "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+      - "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ mysql.final_root_pass }}';"
     when: mysql.install |bool
 
   - name: Add 'root'@'%' user
@@ -226,7 +228,7 @@
       cmd:  "mysql -uroot -e \"{{ item }}\""
     loop:
       - FLUSH PRIVILEGES;
-      - "CREATE USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '{{ final_root_pass }}';"
+      - "CREATE USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '{{ mysql.final_root_pass }}';"
       - GRANT ALL PRIVILEGES ON *.* TO 'root'@'%';
       - FLUSH PRIVILEGES;
     when: mysql.install |bool
